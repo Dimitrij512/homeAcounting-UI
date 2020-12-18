@@ -1,15 +1,43 @@
-import { Component, OnInit } from "@angular/core";
+import {Component, OnInit} from "@angular/core";
 import {ItemService} from 'src/app/services/item.service';
 import Chart from 'chart.js';
 import {Item} from "../../models/item";
-import {ItemDto} from "../../models/itemDto";
-
 @Component({
   selector: "app-dashboard",
-  templateUrl: "dashboard.component.html"
+  templateUrl: "dashboard.component.html",
+  styles: [`
+    .form-group.hidden {
+      width: 0;
+      margin: 0;
+      border: none;
+      padding: 0;
+    }
+
+    .custom-day {
+      text-align: center;
+      padding: 0.185rem 0.25rem;
+      display: inline-block;
+      height: 2rem;
+      width: 2rem;
+    }
+
+    .custom-day.focused {
+      background-color: #e6e6e6;
+    }
+
+    .custom-day.range, .custom-day:hover {
+      background-color: rgb(0, 4, 7);
+      color: white;
+    }
+
+    .custom-day.faded {
+      background-color: rgba(1, 10, 17, 0.5);
+    }
+  `]
 })
+
 export class DashboardComponent implements OnInit {
-  public canvas : any;
+  public canvas: any;
   public ctx;
   public datasets: any;
   public data: any;
@@ -17,16 +45,25 @@ export class DashboardComponent implements OnInit {
   public clicked: boolean = true;
   public clicked1: boolean = false;
   public clicked2: boolean = false;
-  public item : Item;
+  public item: Item;
   public outLayItemList: ItemDto[]
 
-  constructor(private itemService: ItemService){}
+  hoveredDate: NgbDate | null = null;
 
+  fromDate: NgbDate | null;
+  toDate: NgbDate | null;
+
+  constructor(private itemService: ItemService, private calendar: NgbCalendar, public formatter: NgbDateParserFormatter,
+              public config: NgbDatepickerConfig) {
+    config.minDate = {year: 2020, month: 12, day: 1};
+    this.fromDate = calendar.getPrev(calendar.getToday(), 'd', calendar.getToday().day - 1)
+    this.toDate = calendar.getNext(calendar.getToday(), 'd', 31 - calendar.getToday().day);
+  }
 
 
   ngOnInit() {
     this.itemService.getItemById('id').subscribe(it => this.item = it as Item);
-    this.itemService.getItemsByBalanceIdAndData().subscribe(it => this.outLayItemList = it as ItemDto[]);
+    this.itemService.getItemsByBalanceIdAndData('5fd9e34a411ef71140dfc0f2', this.fromDate, this.toDate).subscribe(it => this.outLayItemList = it as ItemDto[]);
 
     var gradientChartOptionsConfigurationWithTooltipBlue: any = {
       maintainAspectRatio: false,
@@ -401,7 +438,6 @@ export class DashboardComponent implements OnInit {
     this.data = this.datasets[0];
 
 
-
     this.canvas = document.getElementById("chartBig1");
     this.ctx = this.canvas.getContext("2d");
 
@@ -439,7 +475,7 @@ export class DashboardComponent implements OnInit {
 
 
     this.canvas = document.getElementById("CountryChart");
-    this.ctx  = this.canvas.getContext("2d");
+    this.ctx = this.canvas.getContext("2d");
     var gradientStroke = this.ctx.createLinearGradient(0, 230, 0, 50);
 
     gradientStroke.addColorStop(1, 'rgba(29,140,248,0.2)');
@@ -471,8 +507,45 @@ export class DashboardComponent implements OnInit {
     });
 
   }
+
+  onDateSelection(date: NgbDate) {
+    if (!this.fromDate && !this.toDate) {
+      this.fromDate = date;
+    } else if (this.fromDate && !this.toDate && date && date.after(this.fromDate)) {
+      this.toDate = date;
+    } else {
+      this.toDate = null;
+      this.fromDate = date;
+    }
+  }
+
+  isHovered(date: NgbDate) {
+    return this.fromDate && !this.toDate && this.hoveredDate && date.after(this.fromDate) && date.before(this.hoveredDate);
+  }
+
+  isInside(date: NgbDate) {
+    return this.toDate && date.after(this.fromDate) && date.before(this.toDate);
+  }
+
+  isRange(date: NgbDate) {
+    return date.equals(this.fromDate) || (this.toDate && date.equals(this.toDate)) || this.isInside(date) || this.isHovered(date);
+  }
+
+  validateInput(currentValue: NgbDate | null, input: string): NgbDate | null {
+    const parsed = this.formatter.parse(input);
+    return parsed && this.calendar.isValid(NgbDate.from(parsed)) ? NgbDate.from(parsed) : currentValue;
+  }
+
+  public getItems() {
+    this.itemService.getItemsByBalanceIdAndData('5fd9e34a411ef71140dfc0f2', this.fromDate, this.toDate)
+      .subscribe(it => this.outLayItemList = it as ItemDto[]);
+  }
+
   public updateOptions() {
     this.myChartData.data.datasets[0].data = this.data;
     this.myChartData.update();
   }
 }
+import {ItemDto} from "../../models/itemDto";
+
+import {NgbDate, NgbCalendar, NgbDateParserFormatter, NgbDatepickerConfig} from '@ng-bootstrap/ng-bootstrap';
